@@ -1,0 +1,47 @@
+# ACT AS: Senior Game Architect & Creative Technologist
+# PROJECT: "Graffiti Master" – High-Fidelity Multiplayer Quiz Game
+
+Build a high-performance, urban-aesthetic multiplayer game. 
+
+## 1. GLOBAL CONFIGURATION & SCALABILITY
+- GRID_RESOLUTION: Default to 128. Logic must be resolution-independent.
+- COORDINATE SYSTEM: All spray data must be transmitted as normalized floats (0 to 1) to ensure cross-device consistency (Mobile vs. Desktop).
+- GAME_TIMER: 120 seconds.
+
+## 2. MULTIPLAYER ARCHITECTURE (PeerJS)
+- Use PeerJS for P2P networking. 
+- **Host Role:** Acts as the "Source of Truth." Manages the 120s timer, randomizes team assignments (N teams), and broadcasts the current Game Phase.
+- **Client Role:** Syncs spray events in real-time. 
+- **State Management:** Use a robust React state or a small store to handle the "Lobby -> Quiz -> Spray -> Leaderboard" cycle.
+
+## 3. PROCEDURAL WALL GENERATOR
+Instead of images, create a `generateWall(type)` function to draw textures to an off-screen canvas:
+- **SCHOOL:** Staggered red bricks, ±10% color variance, light gray mortar, subtle noise speckles.
+- **SUBWAY:** White glossy tiles with inner-shadow depth, dark grout lines, and metallic accents.
+- **POLICE STATION:** Dark charcoal concrete with "pitting" (thousands of tiny dots) and one or two procedural "cracks."
+- **PARKING LOT:** Asphalt charcoal with heavy grain and one "distressed" yellow parking line at a 45-degree angle.
+
+## 4. THE "JUICY" SPRAY ENGINE (The Juice)
+Build a Canvas 2D engine with high-production value physics:
+- **The "SPLAT":** On mousedown, trigger a jagged, organic polygon "splash" (not a circle).
+- **The "GRAIN":** Use a radial gradient with a noise alpha-mask to simulate aerosol mist.
+- **The "DRIPS":** If the cursor stays still, paint "snakes" down the Y-axis. On the 'SCHOOL' wall, drips should follow horizontal mortar lines for 5px before continuing down.
+- **Rewards:** - Correct Answer -> "Fat Cap" (3x radius, 5s duration, triggers screen shake).
+    - Wrong Answer -> "Skinny Cap" (1x radius, 2s duration).
+
+## 5. SCORING & WIN CONDITION
+- Use a bitmask/grid based on GRID_RESOLUTION to track ownership.
+- Teams can paint over each other (Territory War).
+- At 0 seconds, calculate the percentage of occupied cells per Team ID.
+
+## 6. UI/UX (v0 Quality)
+- **Theme:** Urban/Neon. Zinc-950 background, Glassmorphism panels (backdrop-blur), Neon team-colored borders.
+- **Feedback:** - **Audio:** Web Audio API synthesizer for the "Pshhh" sound (white noise with resonance).
+    - **Haptics:** `navigator.vibrate([10])` pulses during spraying.
+    - **UI:** A "Pressure Gauge" (progress bar) that drains as the user sprays.
+
+## IMPLEMENTATION STEPS
+1. Scaffold Next.js and initialize the PeerJS P2P hook.
+2. Build the Procedural Texture Engine for the 4 wall types.
+3. Build the Juicy Spray Engine with Splat, Drip, and Particle logic.
+4. Integrate the Quiz MCQ loop with the dynamic Can-Type rewards.
