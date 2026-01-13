@@ -67,7 +67,7 @@ function drawSplat(
   ctx.fill();
 }
 
-// Draw grain effect using radial gradient with noise
+// Draw splat-splash liquid spray effect
 function drawGrain(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -85,30 +85,81 @@ function drawGrain(
   const g = colorData[1];
   const b = colorData[2];
   
-  // Create radial gradient
-  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.8)`);
-  gradient.addColorStop(0.3, `rgba(${r}, ${g}, ${b}, 0.5)`);
-  gradient.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, 0.2)`);
-  gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-  
-  ctx.fillStyle = gradient;
+  // Draw main irregular splat shape (not a perfect circle)
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fill();
-  
-  // Add noise particles around the spray
-  const particleCount = Math.floor(radius * 0.5);
-  for (let i = 0; i < particleCount; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * radius * 1.2;
+  const points = 8 + Math.floor(Math.random() * 6);
+  for (let i = 0; i < points; i++) {
+    const angle = (i / points) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+    const dist = radius * (0.5 + Math.random() * 0.5);
     const px = x + Math.cos(angle) * dist;
     const py = y + Math.sin(angle) * dist;
-    const size = 1 + Math.random() * 2;
-    const alpha = Math.random() * 0.5;
+    if (i === 0) {
+      ctx.moveTo(px, py);
+    } else {
+      // Use quadratic curves for organic blob shape
+      const cpAngle = angle - (Math.PI / points);
+      const cpDist = radius * (0.6 + Math.random() * 0.4);
+      const cpx = x + Math.cos(cpAngle) * cpDist;
+      const cpy = y + Math.sin(cpAngle) * cpDist;
+      ctx.quadraticCurveTo(cpx, cpy, px, py);
+    }
+  }
+  ctx.closePath();
+  
+  // Fill with gradient for depth
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.9)`);
+  gradient.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, 0.7)`);
+  gradient.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, 0.4)`);
+  gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.1)`);
+  ctx.fillStyle = gradient;
+  ctx.fill();
+  
+  // Add scattered splatter droplets
+  const dropletCount = Math.floor(radius * 1.5);
+  for (let i = 0; i < dropletCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    // Droplets spread further out with some clustering
+    const dist = radius * (0.3 + Math.pow(Math.random(), 0.7) * 1.5);
+    const px = x + Math.cos(angle) * dist;
+    const py = y + Math.sin(angle) * dist;
+    
+    // Varied droplet sizes - some tiny, some bigger splats
+    const size = Math.random() < 0.8 
+      ? 1 + Math.random() * 2  // Small dots
+      : 3 + Math.random() * 4; // Bigger splats
+    
+    const alpha = 0.3 + Math.random() * 0.5;
     
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    ctx.fillRect(px, py, size, size);
+    ctx.beginPath();
+    ctx.arc(px, py, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  // Add a few larger "splash" blobs around the edges
+  const splashCount = 2 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < splashCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = radius * (0.7 + Math.random() * 0.8);
+    const px = x + Math.cos(angle) * dist;
+    const py = y + Math.sin(angle) * dist;
+    const splashRadius = 3 + Math.random() * 5;
+    
+    // Mini blob shape for splash
+    ctx.beginPath();
+    const splashPoints = 5 + Math.floor(Math.random() * 3);
+    for (let j = 0; j < splashPoints; j++) {
+      const sAngle = (j / splashPoints) * Math.PI * 2;
+      const sDist = splashRadius * (0.6 + Math.random() * 0.4);
+      const spx = px + Math.cos(sAngle) * sDist;
+      const spy = py + Math.sin(sAngle) * sDist;
+      if (j === 0) ctx.moveTo(spx, spy);
+      else ctx.lineTo(spx, spy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.4 + Math.random() * 0.4})`;
+    ctx.fill();
   }
 }
 
@@ -194,8 +245,8 @@ export function spray(
   isMouseDown: boolean,
   deltaTime: number
 ): { gridUpdates: { gx: number; gy: number }[] } {
-  const baseRadius = 15;
-  const radius = canType === 'fat' ? baseRadius * 2 : baseRadius;
+  const baseRadius = 7;
+  const radius = canType === 'fat' ? baseRadius * 2 : baseRadius * 0.5;
   const gridUpdates: { gx: number; gy: number }[] = [];
   
   // Calculate grid positions to mark
