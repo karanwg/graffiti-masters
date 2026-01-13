@@ -12,7 +12,7 @@ import { Leaderboard } from './Leaderboard';
 import { SprayEvent, TEAM_COLORS } from '@/lib/types';
 
 export function Game() {
-  const { gameState, myPlayerId, resetGame } = useGameStore();
+  const { gameState, myPlayerId } = useGameStore();
   const [incomingSprayEvents, setIncomingSprayEvents] = useState<SprayEvent[]>([]);
   
   const handleSprayReceived = useCallback((event: SprayEvent) => {
@@ -27,7 +27,8 @@ export function Game() {
     createRoom,
     joinRoom,
     startGame, 
-    sendSpray, 
+    sendSpray,
+    returnToLobby,
   } = usePeerJS({
     onSprayReceived: handleSprayReceived,
   });
@@ -40,9 +41,11 @@ export function Game() {
   );
   
   const handlePlayAgain = useCallback(() => {
-    resetGame();
-    window.location.reload();
-  }, [resetGame]);
+    // Clear spray events
+    setIncomingSprayEvents([]);
+    // Return everyone to lobby
+    returnToLobby();
+  }, [returnToLobby]);
   
   const myTeamId = gameState.players.find((p) => p.id === myPlayerId)?.teamId ?? 0;
   const teamColor = TEAM_COLORS[myTeamId]?.neonColor ?? '#00ffff';

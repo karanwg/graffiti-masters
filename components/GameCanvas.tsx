@@ -126,9 +126,14 @@ export function GameCanvas({ onSpray, incomingSprayEvents = [] }: GameCanvasProp
       const y = event.y * canvas.height;
       const eventTeamColor = TEAM_COLORS[event.teamId]?.neonColor ?? '#ffffff';
       
-      spray(ctx, x, y, event.canType, eventTeamColor, gameState.wallType, true, 0.016);
+      const { gridUpdates } = spray(ctx, x, y, event.canType, eventTeamColor, gameState.wallType, true, 0.016);
+      
+      // Update grid ownership for other players' sprays
+      gridUpdates.forEach(({ gx, gy }) => {
+        updateGridCell(gx, gy, event.teamId);
+      });
     });
-  }, [incomingSprayEvents, gameState.wallType]);
+  }, [incomingSprayEvents, gameState.wallType, updateGridCell]);
   
   // Get mouse/touch position relative to canvas
   const getPosition = useCallback(
@@ -158,7 +163,7 @@ export function GameCanvas({ onSpray, incomingSprayEvents = [] }: GameCanvasProp
   
   // Handle spray painting
   const handleSpray = useCallback(
-    (x: number, y: number, isStart: boolean = false) => {
+    (x: number, y: number) => {
       const canvas = canvasRef.current;
       if (!canvas || !localPlayer.canType || localPlayer.canPressure <= 0) return;
       
@@ -234,7 +239,7 @@ export function GameCanvas({ onSpray, incomingSprayEvents = [] }: GameCanvasProp
       
       const pos = getPosition(e.nativeEvent);
       if (pos) {
-        handleSpray(pos.x, pos.y, true);
+        handleSpray(pos.x, pos.y);
         startSpraySound(localPlayer.canType === 'fat' ? 1 : 0.6);
       }
     },
@@ -248,7 +253,7 @@ export function GameCanvas({ onSpray, incomingSprayEvents = [] }: GameCanvasProp
       
       const pos = getPosition(e.nativeEvent);
       if (pos) {
-        handleSpray(pos.x, pos.y, false);
+        handleSpray(pos.x, pos.y);
         updateSpraySound(localPlayer.canPressure / 100);
       }
     },

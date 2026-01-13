@@ -13,7 +13,43 @@ type MessageType =
   | { type: 'start_game'; state: GameState }
   | { type: 'time_update'; time: number }
   | { type: 'game_end' }
-  | { type: 'request_state' };
+  | { type: 'request_state' }
+  | { type: 'return_to_lobby' };
+
+// Session storage keys
+const SESSION_KEY = 'graffiti_session';
+
+interface SavedSession {
+  roomCode: string;
+  playerId: string;
+  playerName: string;
+  isHost: boolean;
+}
+
+function saveSession(session: SavedSession) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch (e) {
+    console.warn('Failed to save session:', e);
+  }
+}
+
+function loadSession(): SavedSession | null {
+  try {
+    const saved = sessionStorage.getItem(SESSION_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearSession() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch (e) {
+    // ignore
+  }
+}
 
 interface UsePeerJSOptions {
   onSprayReceived?: (event: SprayEvent) => void;
@@ -133,6 +169,11 @@ export function usePeerJS(options: UsePeerJSOptions = {}) {
             }
           }
           break;
+          
+        case 'return_to_lobby':
+          // Reset to lobby phase, keeping connections
+          useGameStore.getState().resetToLobby();
+          break;
       }
     },
     [
@@ -247,6 +288,14 @@ export function usePeerJS(options: UsePeerJSOptions = {}) {
         score: 0,
         isHost: true,
       });
+      
+      // Save session for reconnection
+      saveSession({
+        roomCode: id,
+        playerId: id,
+        playerName,
+        isHost: true,
+      });
     });
     
     peer.on('connection', (conn) => {
@@ -257,6 +306,13 @@ export function usePeerJS(options: UsePeerJSOptions = {}) {
     peer.on('error', (err) => {
       console.error('Peer error:', err);
       setError(`Failed to create room: ${err.message}`);
+      clearSession();
+    });
+    
+    peer.on('disconnected', () => {
+      console.log('Host disconnected from signaling server');
+      // Try to reconnect
+      peer.reconnect();
     });
     
     return code;
@@ -264,9 +320,9 @@ export function usePeerJS(options: UsePeerJSOptions = {}) {
   
   // Join room (become client)
   const joinRoom = useCallback(
-    (code: string) => {
+    (code: string, savedPlayerId?: string) => {
       setError(null);
-      const myId = Math.random().toString(36).substring(2, 10);
+      const myId = savedPlayerId || Math.random().toString(36).substring(2, 10);
       
       const peer = new Peer(myId, {
         debug: 2,
@@ -277,6 +333,17 @@ export function usePeerJS(options: UsePeerJSOptions = {}) {
         peerRef.current = peer;
         setMyPlayerId(id);
         setRoomCode(code.toUpperCase());
+        
+        const store = useGameStore.getState();
+        const playerName = store.myPlayerName || `Player ${id.slice(-4)}`;
+        
+        // Save session for reconnection
+        saveSession({
+          roomCode: code.toUpperCase(),
+          playerId: id,
+          playerName,
+          isHost: false,
+        });
         
         // Connect to host
         const conn = peer.connect(code.toUpperCase(), {
@@ -293,6 +360,12 @@ export function usePeerJS(options: UsePeerJSOptions = {}) {
         } else {
           setError(`Failed to join room: ${err.message}`);
         }
+        clearSession();
+      });
+      
+      peer.on('disconnected', () => {
+        console.log('Client disconnected from signaling server');
+        peer.reconnect();
       });
     },
     [setMyPlayerId, setupConnection]
@@ -362,6 +435,73 @@ export function usePeerJS(options: UsePeerJSOptions = {}) {
     [broadcast, sendToHost]
   );
   
+  // Return to lobby (host only, sends all players back)
+  const returnToLobby = useCallback(() => {
+    const state = useGameStore.getState();
+    const currentIsHost = state.gameState.hostId === state.myPlayerId;
+    
+    // Stop any running timer
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Reset local state to lobby
+    useGameStore.getState().resetToLobby();
+    
+    // If host, broadcast to all clients
+    if (currentIsHost) {
+      broadcast({ type: 'return_to_lobby' });
+    }
+  }, [broadcast]);
+  
+  // Auto-reconnect on mount if session exists
+  useEffect(() => {
+    const session = loadSession();
+    if (session && !isConnected && !peerRef.current) {
+      console.log('Found saved session, attempting to reconnect:', session);
+      
+      // Set player name from session
+      useGameStore.getState().setMyPlayerName(session.playerName);
+      
+      if (session.isHost) {
+        // Recreate as host with same room code
+        const peer = new Peer(session.roomCode, { debug: 2 });
+        
+        peer.on('open', (id) => {
+          console.log('Reconnected as host with ID:', id);
+          peerRef.current = peer;
+          setMyPlayerId(id);
+          setHostId(id);
+          setRoomCode(id);
+          setIsConnected(true);
+          
+          // Add self as player
+          addPlayer({
+            id,
+            name: session.playerName,
+            teamId: -1,
+            score: 0,
+            isHost: true,
+          });
+        });
+        
+        peer.on('connection', (conn) => {
+          console.log('Incoming connection from:', conn.peer);
+          setupConnection(conn);
+        });
+        
+        peer.on('error', (err) => {
+          console.error('Reconnect failed:', err);
+          clearSession();
+        });
+      } else {
+        // Reconnect as client
+        joinRoom(session.roomCode, session.playerId);
+      }
+    }
+  }, []); // Run once on mount
+  
   // Cleanup
   useEffect(() => {
     return () => {
@@ -382,5 +522,6 @@ export function usePeerJS(options: UsePeerJSOptions = {}) {
     joinRoom,
     startGame,
     sendSpray,
+    returnToLobby,
   };
 }

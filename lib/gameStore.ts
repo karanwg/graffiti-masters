@@ -58,6 +58,7 @@ interface GameStore {
   
   // Reset
   resetGame: () => void;
+  resetToLobby: () => void;
 }
 
 const initialGameState: GameState = {
@@ -319,4 +320,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       localPlayer: { ...initialLocalState },
       shuffledQuestions: [],
     }),
+    
+  resetToLobby: () =>
+    set((state) => ({
+      gameState: {
+        ...state.gameState,
+        phase: 'lobby',
+        timeRemaining: GAME_DURATION,
+        grid: null,
+        // Reset teams but keep players
+        teams: TEAM_COLORS.map(t => ({ ...t, playerIds: [], territoryPercent: 0 })),
+      },
+      localPlayer: { ...initialLocalState },
+      shuffledQuestions: [],
+    })),
 }));
