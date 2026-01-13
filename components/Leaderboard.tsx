@@ -55,12 +55,10 @@ export function Leaderboard({ onPlayAgain }: LeaderboardProps) {
               return (
                 <div
                   key={team.id}
-                  className={`relative overflow-hidden rounded-xl p-4 ${
-                    isWinner ? 'ring-2' : ''
-                  }`}
+                  className="relative overflow-hidden rounded-xl p-4"
                   style={{
                     background: `linear-gradient(90deg, ${teamColor.color}30, transparent)`,
-                    ringColor: teamColor.neonColor,
+                    boxShadow: isWinner ? `inset 0 0 0 2px ${teamColor.neonColor}` : 'none',
                   }}
                 >
                   <div className="flex justify-between items-center relative z-10">
